@@ -1,0 +1,71 @@
+[project]
+name = "sensors-anomalies"
+version = "0.1.0"
+description = "Sensor anomalies detection demo with datasets and algorithms registry"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "joblib>=1.4",
+  "matplotlib>=3.8",
+  "gradio>=4.44",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "tox>=4.15",
+  "pylint>=3.2",
+  "types-python-dateutil",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+fix = true
+
+[tool.ruff.lint]
+select = ["D", "E", "F", "I", "W", "S", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sensors_anomalies"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+warn_unused_configs = true
+
+[tool.pylint.main]
+py-version = "3.11"
+jobs = 0
+fail-under = 8.5
+ignore = ["build", "dist", "venv"]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]
+
+[tool.pydoclint]
+style = "numpy"
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = ["mypy-matplotlib.*","pandas.*","pytest.*","sklearn.*","numpy.*","attr.*","paths.*"]
