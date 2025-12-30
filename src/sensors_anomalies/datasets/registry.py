@@ -1,8 +1,12 @@
 """
 Datasets registry.
 
-A dataset is registered with a DatasetSpec and a loader function returning a
-LoadedDataset in the common long format.
+A dataset transformer is registered with a DatasetSpec and a transformation function
+that converts a specific wide-format CSV structure to the canonical long format.
+
+These transformers serve as reference implementations showing how to normalize
+different Kaggle dataset structures. Users upload CSVs at runtime rather than
+including data in the repository.
 """
 
 from __future__ import annotations
@@ -11,44 +15,44 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from sensors_anomalies.types import DatasetSpec, LoadedDataset, validate_long_df
+from sensors_anomalies.types import DatasetSpec, validate_long_df
 
-LoaderFn = Callable[[], LoadedDataset]
+TransformerFn = Callable[[pd.DataFrame], pd.DataFrame]
 
-_DATASETS: dict[str, tuple[DatasetSpec, LoaderFn]] = {}
+_TRANSFORMERS: dict[str, tuple[DatasetSpec, TransformerFn]] = {}
 
 
-def register_dataset(spec: DatasetSpec, loader: LoaderFn) -> None:
+def register_transformer(spec: DatasetSpec, transformer: TransformerFn) -> None:
     """
-    Register a dataset loader.
+    Register a dataset transformer.
 
     Parameters
     ----------
     spec : DatasetSpec
         Dataset metadata.
-    loader : LoaderFn
-        Loader returning the dataset in long format.
+    transformer : TransformerFn
+        Function that transforms wide-format DataFrame to long format.
     """
-    _DATASETS[spec.dataset_id] = (spec, loader)
+    _TRANSFORMERS[spec.dataset_id] = (spec, transformer)
 
 
-def list_datasets() -> list[str]:
+def list_transformers() -> list[str]:
     """
-    List registered dataset identifiers.
+    List registered dataset transformer identifiers.
 
     Returns
     -------
     list[str]
-        Sorted dataset ids.
+        Sorted transformer ids.
     """
-    if not _DATASETS:
+    if not _TRANSFORMERS:
         _register_defaults()
-    return sorted(_DATASETS.keys())
+    return sorted(_TRANSFORMERS.keys())
 
 
-def load_dataset(dataset_id: str) -> LoadedDataset:
+def get_transformer(dataset_id: str) -> tuple[DatasetSpec, TransformerFn]:
     """
-    Load a dataset by id.
+    Get a dataset transformer by id.
 
     Parameters
     ----------
@@ -57,42 +61,59 @@ def load_dataset(dataset_id: str) -> LoadedDataset:
 
     Returns
     -------
-    LoadedDataset
-        Loaded dataset.
+    tuple[DatasetSpec, TransformerFn]
+        Dataset spec and transformer function.
+
+    Raises
+    ------
+    KeyError
+        If dataset_id is not registered.
     """
-    if not _DATASETS:
+    if not _TRANSFORMERS:
         _register_defaults()
-    spec, loader = _DATASETS[dataset_id]
-    ds = loader()
-    validate_long_df(ds.df)
-    return ds
+
+    if dataset_id not in _TRANSFORMERS:
+        available = ", ".join(sorted(_TRANSFORMERS.keys()))
+        raise KeyError(f"Transformer '{dataset_id}' not found. Available: {available}")
+
+    return _TRANSFORMERS[dataset_id]
+
+
+def apply_transformer(dataset_id: str, df_wide: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply a registered transformer to a wide-format dataframe.
+
+    Parameters
+    ----------
+    dataset_id : str
+        Dataset identifier.
+    df_wide : pd.DataFrame
+        Wide-format dataframe to transform.
+
+    Returns
+    -------
+    pd.DataFrame
+        Long-format dataframe.
+
+    Raises
+    ------
+    KeyError
+        If dataset_id is not registered.
+    ValueError
+        If transformation fails or output is invalid.
+    """
+    spec, transformer = get_transformer(dataset_id)
+    df_long = transformer(df_wide)
+    validate_long_df(df_long)
+    return df_long
 
 
 def _register_defaults() -> None:
-    """Register placeholder datasets so the app runs before real loaders are added."""
+    """Register default transformers."""
+    # Register real dataset transformers
+    try:
+        from sensors_anomalies.datasets.sensor_fault import register_sensor_fault_transformer
 
-    def _toy_loader() -> LoadedDataset:
-        """
-        Create a tiny toy dataset.
-
-        Returns
-        -------
-        LoadedDataset
-            Small dataset with labels.
-        """
-        df = pd.DataFrame(
-            {
-                "series_id": ["s1"] * 5,
-                "timestamp": pd.date_range("2024-01-01", periods=5, freq="min"),
-                "signal": ["sensor_a"] * 5,
-                "value": [1.0, 1.0, 1.0, 10.0, 1.0],
-                "label": [0, 0, 0, 1, 0],
-            }
-        )
-        return LoadedDataset(
-            spec=DatasetSpec("toy", "Toy dataset", "N/A"),
-            df=df,
-            has_labels=True,
-        )
-
-    register_dataset(DatasetSpec("toy", "Toy dataset", "N/A"), _toy_loader)
+        register_sensor_fault_transformer()
+    except ImportError:
+        pass  # Module not available yet

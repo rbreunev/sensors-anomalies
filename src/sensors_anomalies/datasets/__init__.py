@@ -1,12 +1,17 @@
 """
-Dataset registry and loaders.
+Dataset registry and transformers.
 
-The project uses a registry so the Gradio app can switch datasets without
-changing application code.
+The project uses a registry to transform wide-format CSVs to the canonical
+long format at runtime.
 """
 
 from __future__ import annotations
 
-from sensors_anomalies.datasets.registry import list_datasets, load_dataset, register_dataset
+from sensors_anomalies.datasets.registry import (
+    apply_transformer,
+    get_transformer,
+    list_transformers,
+    register_transformer,
+)
 
-__all__ = ["register_dataset", "list_datasets", "load_dataset"]
+__all__ = ["register_transformer", "list_transformers", "get_transformer", "apply_transformer"]
