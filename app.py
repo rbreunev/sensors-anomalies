@@ -41,10 +41,10 @@ def build_app() -> gr.Blocks:
     with gr.Blocks(title="Sensors Anomalies Demo") as demo:
         gr.Markdown("# 🔍 Sensors Anomalies Detection")
         gr.Markdown(
-            "Many scientific or industrial applications rely on sensor data. Hence, the importance to detect sensor anomalies before to build datasets for applications. "
+            "Many scientific or industrial applications rely on sensor data. "
+            "Hence, the importance to detect sensor anomalies before to build datasets for further use cases.\n\n"
             "This application allows to test several approaches for such detections. "
-            "Upload a CSV file with sensor time-series data. "
-            "The app supports three formats: **long format**, **semi-long format**, and **wide format**."
+            "Upload a CSV file with sensor time-series data and start testing !."
         )
         gr.Markdown("""
 **📝 CSV Format Requirements:**
