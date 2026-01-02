@@ -22,11 +22,11 @@ from sklearn.ensemble import IsolationForest
 logger = logging.getLogger(__name__)
 
 
-def detect_zscore(
+def detect_zscore(  # pylint: disable=too-many-locals
     df_long: pd.DataFrame,
     threshold: float = 3.5,
     use_modified: bool = True,
-) -> pd.DataFrame:  # pylint: disable=too-many-locals
+) -> pd.DataFrame:
     """
     Z-Score anomaly detection (per-sensor).
 
@@ -49,7 +49,8 @@ def detect_zscore(
     Returns
     -------
     pd.DataFrame
-        Result dataframe with columns: series_id, signal, timestamp_start, timestamp_end, score, is_anomaly.
+        Result dataframe with columns: series_id, signal, timestamp_start,
+        timestamp_end, score, is_anomaly.
     """
     results = []
 
@@ -103,7 +104,12 @@ def detect_zscore(
 
     if not results:
         logger.warning("Z-Score detection: No data points found in input dataframe")
-        return pd.DataFrame(columns=["series_id", "signal", "timestamp_start", "timestamp_end", "score", "is_anomaly"])
+        return pd.DataFrame(
+            columns=[
+                "series_id", "signal", "timestamp_start", "timestamp_end",
+                "score", "is_anomaly"
+            ]
+        )
 
     result_df = pd.DataFrame(results)
     n_anomalies = result_df["is_anomaly"].sum()
@@ -141,7 +147,8 @@ def detect_iqr(df_long: pd.DataFrame, multiplier: float = 1.5) -> pd.DataFrame: 
     Returns
     -------
     pd.DataFrame
-        Result dataframe with columns: series_id, signal, timestamp_start, timestamp_end, score, is_anomaly.
+        Result dataframe with columns: series_id, signal, timestamp_start,
+        timestamp_end, score, is_anomaly.
     """
     results = []
 
@@ -182,7 +189,12 @@ def detect_iqr(df_long: pd.DataFrame, multiplier: float = 1.5) -> pd.DataFrame: 
 
     if not results:
         logger.warning("IQR detection: No data points found in input dataframe")
-        return pd.DataFrame(columns=["series_id", "signal", "timestamp_start", "timestamp_end", "score", "is_anomaly"])
+        return pd.DataFrame(
+            columns=[
+                "series_id", "signal", "timestamp_start", "timestamp_end",
+                "score", "is_anomaly"
+            ]
+        )
 
     result_df = pd.DataFrame(results)
     n_anomalies = result_df["is_anomaly"].sum()
@@ -203,12 +215,12 @@ def detect_iqr(df_long: pd.DataFrame, multiplier: float = 1.5) -> pd.DataFrame: 
     return result_df
 
 
-def detect_isolation_forest(
+def detect_isolation_forest(  # pylint: disable=too-many-locals
     df_long: pd.DataFrame,
     contamination: float = 0.1,
     n_estimators: int = 100,
     random_state: int = 42,
-) -> pd.DataFrame:  # pylint: disable=too-many-locals
+) -> pd.DataFrame:
     """
     Isolation Forest anomaly detection (per-sensor).
 
@@ -228,7 +240,8 @@ def detect_isolation_forest(
     Returns
     -------
     pd.DataFrame
-        Result dataframe with columns: series_id, signal, timestamp_start, timestamp_end, score, is_anomaly.
+        Result dataframe with columns: series_id, signal, timestamp_start,
+        timestamp_end, score, is_anomaly.
     """
     results = []
 
@@ -240,7 +253,8 @@ def detect_isolation_forest(
         # Need at least 2 samples for Isolation Forest
         if len(values) < 2:
             logger.warning(
-                "Isolation Forest: Signal '%s' (series '%s') has only %s sample(s), marking all as normal",
+                "Isolation Forest: Signal '%s' (series '%s') has only %s sample(s), "
+                "marking all as normal",
                 signal,
                 series_id,
                 len(values),
@@ -279,7 +293,9 @@ def detect_isolation_forest(
             normalized_scores = np.zeros(len(anomaly_scores))
 
         # Create result rows
-        for _idx, (timestamp, pred, score) in enumerate(zip(timestamps, predictions, normalized_scores, strict=True)):
+        for _idx, (timestamp, pred, score) in enumerate(
+            zip(timestamps, predictions, normalized_scores, strict=True)
+        ):
             results.append(
                 {
                     "series_id": series_id,
@@ -293,13 +309,19 @@ def detect_isolation_forest(
 
     if not results:
         logger.warning("Isolation Forest detection: No data points found in input dataframe")
-        return pd.DataFrame(columns=["series_id", "signal", "timestamp_start", "timestamp_end", "score", "is_anomaly"])
+        return pd.DataFrame(
+            columns=[
+                "series_id", "signal", "timestamp_start", "timestamp_end",
+                "score", "is_anomaly"
+            ]
+        )
 
     result_df = pd.DataFrame(results)
     n_anomalies = result_df["is_anomaly"].sum()
     if n_anomalies == 0:
         logger.warning(
-            "Isolation Forest detection: No anomalies detected (contamination=%s, %s points analyzed)",
+            "Isolation Forest detection: No anomalies detected "
+            "(contamination=%s, %s points analyzed)",
             contamination,
             len(result_df),
         )

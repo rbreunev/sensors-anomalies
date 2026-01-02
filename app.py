@@ -196,10 +196,111 @@ All algorithms analyze each sensor signal independently and return anomaly score
 
         anomaly_plot = gr.Plot(label="Anomaly Detection Results")
 
+        gr.Markdown("## ⏱️ Detect Period of Anomalies")
+        gr.Markdown(
+            "Detect **anomaly periods** from point-by-point detection results. "
+            "A period is identified when **K out of N consecutive points** exceed a score threshold. "
+            "**Note:** You must run 'Run Detection' first to generate point-by-point results."
+        )
+        gr.Markdown("""
+**How it works:**
+1. First, run the point-by-point detection above to generate anomaly scores for each timestamp
+2. Set your parameters below:
+   - **K**: Minimum number of anomalous points required in the window
+   - **N**: Size of the forward-looking window to check
+   - **Score Threshold**: Minimum anomaly score for a point to be considered anomalous
+3. The algorithm checks each point: if K out of the next N consecutive points exceed the threshold, that point is marked as part of a period
+4. Consecutive marked points are merged into a single period
+
+**Example:** With K=3, N=5, threshold=2.0:
+- At each timestamp, look at the next 5 consecutive points (including current)
+- If at least 3 of those 5 points have score ≥ 2.0, mark this timestamp as part of an anomaly period
+- All consecutive marked timestamps form continuous periods (timestamp_start to timestamp_end)
+
+**Tip:** Use the point-by-point detection visualization above to explore score distributions and set appropriate thresholds.
+        """)
+
+        with gr.Row():
+            period_k = gr.Number(
+                label="K - Minimum anomalous points in window",
+                value=3,
+                minimum=1,
+                step=1,
+                info="At least K points must exceed threshold in window"
+            )
+            period_n = gr.Number(
+                label="N - Window size",
+                value=5,
+                minimum=1,
+                step=1,
+                info="Size of sliding window to check"
+            )
+            period_threshold = gr.Number(
+                label="Score Threshold",
+                value=2.0,
+                minimum=0.0,
+                step=0.1,
+                info="Minimum score for a point to be considered anomalous"
+            )
+
+        period_detect_btn = gr.Button("🔍 Detect Anomaly Periods", variant="primary")
+
+        period_detection_output = gr.Textbox(
+            label="Period Detection Summary",
+            lines=10,
+            placeholder="Run period detection to see results...",
+        )
+
+        gr.Markdown("## 📋 Period of Anomalies Results")
+        gr.Markdown("Statistics and details of detected anomaly periods. Shows the first 10 periods for each algorithm.")
+
+        period_results_table = gr.Dataframe(
+            label="Detected Anomaly Periods (First 10 per algorithm)",
+            interactive=False,
+            wrap=True,
+        )
+
+        gr.Markdown("## 📊 Period of Anomalies Visualization")
+        gr.Markdown(
+            "Visualize anomaly periods as horizontal colored bands on the time series. "
+            "Each algorithm's periods are shown in different colors. "
+            "Select a signal to see its anomaly periods."
+        )
+
+        with gr.Row():
+            period_viz_signal = gr.Dropdown(
+                choices=[],
+                label="Select Signal to Visualize",
+                value=None,
+                info="Choose one signal for period visualization"
+            )
+
+        with gr.Row():
+            period_viz_algorithms = gr.CheckboxGroup(
+                choices=[],
+                label="Display Algorithms",
+                value=[],
+                info="Select which algorithms' periods to show"
+            )
+
+        with gr.Row():
+            period_viz_sample_rate = gr.Number(
+                label="Sampling Rate (plot 1 out of K points)",
+                value=1,
+                minimum=1,
+                step=1,
+                info="Sampling for display performance only",
+            )
+
+        period_viz_btn = gr.Button("📊 Visualize Period Anomalies", variant="secondary")
+
+        period_viz_plot = gr.Plot(label="Anomaly Periods Visualization")
+
         # Store the processed dataframe in state
         processed_df_state = gr.State(value=None)
         available_signals_state = gr.State(value=[])
         detection_results_state = gr.State(value=None)
+        period_results_state = gr.State(value=None)
 
         def process_csv(
             file_bytes: bytes | None,
@@ -818,6 +919,372 @@ All algorithms analyze each sensor signal independently and return anomaly score
 
             return fig
 
+        def detect_periods(
+            detection_results: pd.DataFrame | None,
+            k: int,
+            n: int,
+            threshold: float,
+        ) -> tuple[str, pd.DataFrame | None, pd.DataFrame | None, gr.CheckboxGroup, gr.Dropdown]:
+            """
+            Detect anomaly periods from point-by-point results.
+
+            Parameters
+            ----------
+            detection_results : pd.DataFrame or None
+                Point-by-point detection results
+            k : int
+                Minimum anomalous points in window
+            n : int
+                Window size
+            threshold : float
+                Score threshold
+
+            Returns
+            -------
+            tuple[str, pd.DataFrame | None, pd.DataFrame | None, gr.CheckboxGroup, gr.Dropdown]
+                Summary message, display dataframe, full results, algorithm selector update, signal dropdown update
+            """
+            # Import here to avoid circular imports
+            from sensors_anomalies.algorithms.periods import detect_anomaly_periods
+
+            if detection_results is None or detection_results.empty:
+                return (
+                    "❌ Please run point-by-point detection first (use 'Run Detection' button above)",
+                    None,
+                    None,
+                    gr.CheckboxGroup(choices=[], value=[]),
+                    gr.Dropdown(choices=[], value=None),
+                )
+
+            # Validate parameters
+            k = int(k)
+            n = int(n)
+
+            if k > n:
+                return (
+                    f"❌ Invalid parameters: K ({k}) must be <= N ({n})",
+                    None,
+                    None,
+                    gr.CheckboxGroup(choices=[], value=[]),
+                    gr.Dropdown(choices=[], value=None),
+                )
+
+            if k < 1 or n < 1:
+                return (
+                    f"❌ Invalid parameters: K ({k}) and N ({n}) must be >= 1",
+                    None,
+                    None,
+                    gr.CheckboxGroup(choices=[], value=[]),
+                    gr.Dropdown(choices=[], value=None),
+                )
+
+            try:
+                # Filter to only anomalous points before period detection
+                if "is_anomaly" in detection_results.columns:
+                    anomalous_points = detection_results[detection_results["is_anomaly"]].copy()
+                else:
+                    anomalous_points = detection_results.copy()
+
+                if anomalous_points.empty:
+                    summary = (
+                        f"⚠️ No anomalies found in point detection results\n\n"
+                        f"Parameters: K={k}, N={n}, Threshold={threshold}\n\n"
+                        f"Cannot detect periods without anomalous points.\n"
+                        f"Try running point detection with different algorithms or parameters first."
+                    )
+                    return (
+                        summary,
+                        None,
+                        None,
+                        gr.CheckboxGroup(choices=[], value=[]),
+                        gr.Dropdown(choices=[], value=None),
+                    )
+
+                # Run period detection on anomalous points only
+                period_results = detect_anomaly_periods(
+                    anomalous_points,
+                    k=k,
+                    n=n,
+                    score_threshold=threshold,
+                )
+
+                if period_results.empty:
+                    summary = (
+                        f"⚠️ No anomaly periods detected\n\n"
+                        f"Parameters: K={k}, N={n}, Threshold={threshold}\n"
+                        f"Analyzed {len(detection_results)} points\n\n"
+                        f"Try:\n"
+                        f"  • Lowering the score threshold\n"
+                        f"  • Decreasing K (fewer anomalous points required)\n"
+                        f"  • Increasing N (larger window size)"
+                    )
+                    return (
+                        summary,
+                        None,
+                        None,
+                        gr.CheckboxGroup(choices=[], value=[]),
+                        gr.Dropdown(choices=[], value=None),
+                    )
+
+                # Calculate statistics per algorithm
+                summary_lines = [
+                    "✅ Period Detection Complete",
+                    f"\nParameters: K={k} out of N={n}, Score Threshold={threshold}",
+                    f"Input: {len(detection_results)} points",
+                    f"\n📊 Results by Algorithm:",
+                ]
+
+                algorithms = sorted(period_results["algorithm"].unique())
+                signals = sorted(period_results["signal"].unique())
+
+                for algo in algorithms:
+                    algo_periods = period_results[period_results["algorithm"] == algo]
+                    n_periods = len(algo_periods)
+
+                    if n_periods > 0:
+                        longest = algo_periods["n_points"].max()
+                        shortest = algo_periods["n_points"].min()
+                        mean_duration = algo_periods["n_points"].mean()
+
+                        summary_lines.extend([
+                            f"\n{algo}:",
+                            f"  • Periods detected: {n_periods}",
+                            f"  • Longest period: {longest} timestamps",
+                            f"  • Shortest period: {shortest} timestamps",
+                            f"  • Mean duration: {mean_duration:.1f} timestamps",
+                        ])
+
+                # Create display dataframe - first 10 periods per algorithm
+                display_rows = []
+                for algo in algorithms:
+                    algo_periods = period_results[period_results["algorithm"] == algo].head(10)
+                    display_rows.append(algo_periods)
+
+                if display_rows:
+                    display_df = pd.concat(display_rows, ignore_index=True)
+                    # Sort by algorithm, then by timestamp
+                    display_df = display_df.sort_values(["algorithm", "timestamp_start"])
+                else:
+                    display_df = period_results.head(10)
+
+                summary_lines.append(f"\n📋 Showing first 10 periods per algorithm in table below")
+                summary_lines.append(f"Total periods: {len(period_results)}")
+
+                # Update UI components
+                algo_selector_update = gr.CheckboxGroup(
+                    choices=algorithms,
+                    value=algorithms,
+                    label="Display Algorithms",
+                    info="Select which algorithms' periods to show"
+                )
+
+                signal_dropdown_update = gr.Dropdown(
+                    choices=signals,
+                    value=signals[0] if signals else None,
+                    label="Select Signal to Visualize",
+                    info="Choose one signal for period visualization"
+                )
+
+                return (
+                    "\n".join(summary_lines),
+                    display_df,
+                    period_results,
+                    algo_selector_update,
+                    signal_dropdown_update,
+                )
+
+            except Exception as e:
+                return (
+                    f"❌ Error during period detection: {e!s}",
+                    None,
+                    None,
+                    gr.CheckboxGroup(choices=[], value=[]),
+                    gr.Dropdown(choices=[], value=None),
+                )
+
+        def plot_period_visualization(
+            df_long: pd.DataFrame | None,
+            selected_signal: str | None,
+            period_results: pd.DataFrame | None,
+            algorithm_filter: list[str] | None,
+            sample_rate: int,
+        ) -> go.Figure:
+            """
+            Generate period visualization with horizontal bands.
+
+            Parameters
+            ----------
+            df_long : pd.DataFrame or None
+                Processed long-format dataframe
+            selected_signal : str or None
+                Signal to visualize
+            period_results : pd.DataFrame or None
+                Period detection results
+            algorithm_filter : list[str] or None
+                Algorithms to display
+            sample_rate : int
+                Sampling rate for display
+
+            Returns
+            -------
+            go.Figure
+                Plotly figure with period bands
+            """
+            if df_long is None:
+                fig = go.Figure()
+                fig.add_annotation(
+                    text="Please process a CSV file first",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5,
+                    showarrow=False,
+                    font=dict(size=16),
+                )
+                fig.update_layout(xaxis_visible=False, yaxis_visible=False)
+                return fig
+
+            if period_results is None or period_results.empty:
+                fig = go.Figure()
+                fig.add_annotation(
+                    text="Please run period detection first",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5,
+                    showarrow=False,
+                    font=dict(size=16),
+                )
+                fig.update_layout(xaxis_visible=False, yaxis_visible=False)
+                return fig
+
+            if not selected_signal:
+                fig = go.Figure()
+                fig.add_annotation(
+                    text="Please select a signal to visualize",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5,
+                    showarrow=False,
+                    font=dict(size=16),
+                )
+                fig.update_layout(xaxis_visible=False, yaxis_visible=False)
+                return fig
+
+            # Filter data for selected signal
+            k = max(1, int(sample_rate))
+            df_plot = df_long[df_long["signal"] == selected_signal].copy()
+
+            if k > 1:
+                df_plot = df_plot.iloc[::k]
+
+            # Create figure
+            fig = go.Figure()
+
+            # Plot signal line first
+            fig.add_trace(go.Scatter(
+                x=df_plot["timestamp"],
+                y=df_plot["value"],
+                mode="lines",
+                name=selected_signal,
+                line=dict(width=2, color="blue"),
+                showlegend=True,
+            ))
+
+            # Filter periods for selected signal
+            signal_periods = period_results[period_results["signal"] == selected_signal].copy()
+
+            if algorithm_filter:
+                signal_periods = signal_periods[signal_periods["algorithm"].isin(algorithm_filter)]
+
+            if len(signal_periods) == 0:
+                fig.add_annotation(
+                    text="No anomaly periods detected for this signal with selected algorithms",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.95,
+                    showarrow=False,
+                    font=dict(size=14, color="green"),
+                    bgcolor="rgba(144, 238, 144, 0.3)",
+                    bordercolor="green",
+                    borderwidth=2,
+                    borderpad=10,
+                )
+            else:
+                # Define colors for algorithms (with transparency)
+                algo_colors = {
+                    "zscore": "rgba(255, 0, 0, 0.3)",  # Red with transparency
+                    "iqr": "rgba(255, 165, 0, 0.3)",  # Orange with transparency
+                    "isolation_forest": "rgba(128, 0, 128, 0.3)",  # Purple with transparency
+                }
+
+                algo_names = {
+                    "zscore": "Z-Score",
+                    "iqr": "IQR",
+                    "isolation_forest": "Isolation Forest",
+                }
+
+                # Get y-axis range for bands
+                y_min = df_plot["value"].min()
+                y_max = df_plot["value"].max()
+                y_range = y_max - y_min
+                margin = y_range * 0.05 if y_range > 0 else 1
+                y_lower = y_min - margin
+                y_upper = y_max + margin
+
+                # Group periods by algorithm for better legend control
+                algorithms_with_periods = signal_periods["algorithm"].unique()
+
+                for algo in algorithms_with_periods:
+                    algo_periods = signal_periods[signal_periods["algorithm"] == algo]
+                    color = algo_colors.get(algo, "rgba(128, 128, 128, 0.3)")
+                    algo_name = algo_names.get(algo, algo)
+
+                    # Create one trace per algorithm with all its periods
+                    # Use scatter with fill to create toggleable rectangles
+                    x_coords = []
+                    y_coords = []
+
+                    for _, period in algo_periods.iterrows():
+                        # Create a rectangle by adding 5 points (bottom-left, top-left, top-right, bottom-right, close)
+                        x_start = period["timestamp_start"]
+                        x_end = period["timestamp_end"]
+
+                        # Add rectangle coordinates (closed path)
+                        x_coords.extend([x_start, x_start, x_end, x_end, x_start, None])
+                        y_coords.extend([y_lower, y_upper, y_upper, y_lower, y_lower, None])
+
+                    # Add single trace for this algorithm with all its periods
+                    fig.add_trace(go.Scatter(
+                        x=x_coords,
+                        y=y_coords,
+                        fill="toself",
+                        fillcolor=color,
+                        line=dict(width=0),
+                        mode="lines",
+                        name=f"Period: {algo_name}",
+                        showlegend=True,
+                        hoverinfo="skip",
+                        legendgroup=algo,
+                    ))
+
+            # Update layout
+            n_points = len(df_plot)
+            sampling_info = f" (sampling: 1/{k})" if k > 1 else ""
+            n_periods = len(signal_periods)
+            period_info = f" | {n_periods} period(s) detected" if n_periods > 0 else " | No periods"
+
+            fig.update_layout(
+                title=f"Anomaly Period Visualization - {selected_signal}, {n_points} points{sampling_info}{period_info}",
+                xaxis_title="Timestamp",
+                yaxis_title="Value",
+                hovermode="x unified",
+                legend=dict(
+                    orientation="v",
+                    yanchor="top",
+                    y=1,
+                    xanchor="left",
+                    x=1.02,
+                ),
+                height=600,
+            )
+
+            return fig
+
         # Wire up callbacks
         process_btn.click(
             process_csv,
@@ -841,6 +1308,18 @@ All algorithms analyze each sensor signal independently and return anomaly score
             plot_anomaly_visualization,
             inputs=[processed_df_state, viz_signal_selector, detection_results_state, viz_algorithm_filter, viz_score_threshold, viz_sample_rate],
             outputs=[anomaly_plot],
+        )
+
+        period_detect_btn.click(
+            detect_periods,
+            inputs=[detection_results_state, period_k, period_n, period_threshold],
+            outputs=[period_detection_output, period_results_table, period_results_state, period_viz_algorithms, period_viz_signal],
+        )
+
+        period_viz_btn.click(
+            plot_period_visualization,
+            inputs=[processed_df_state, period_viz_signal, period_results_state, period_viz_algorithms, period_viz_sample_rate],
+            outputs=[period_viz_plot],
         )
 
     return demo

@@ -38,7 +38,61 @@ uv run python app.py
 
 2. **Process CSV** - Automatically detects format and validates/transforms to long format
 
-3. **Run Detection** - Select algorithms and detect anomalies (coming in Step 3)
+3. **Run Detection** - Select algorithms and detect anomalies
+
+4. **Visualize Results** - View point-by-point anomalies on interactive plots
+
+5. **Detect Periods** - Identify sustained anomaly periods (optional)
+
+### Period-Based Anomaly Detection
+
+In addition to point-by-point detection, the app supports **period-based anomaly detection** to identify sustained anomalies:
+
+**Workflow:**
+
+1. **Run Point Detection** - First, run the standard anomaly detection to get scores for each timestamp
+2. **Configure Period Parameters**:
+   - **K**: Minimum number of anomalous points required in the window (e.g., 3)
+   - **N**: Size of the sliding window to check (e.g., 5)
+   - **Score Threshold**: Minimum anomaly score for a point to be considered anomalous (e.g., 2.0)
+3. **Detect Periods** - The algorithm uses a sliding window approach to identify continuous anomaly periods
+4. **View Statistics** - See number of periods, longest/shortest periods, mean duration
+5. **Visualize Periods** - View periods as colored horizontal bands on the time series plot
+
+**How Period Detection Works:**
+
+The period detection algorithm uses a forward-looking window approach. For each timestamp in the data, it looks at the next N consecutive points in the timeline. If K or more of those N points exceed the score threshold, that timestamp is marked as part of an anomaly period. All consecutive marked timestamps are then merged into continuous periods.
+
+**Example:** With K=3, N=5, threshold=2.0:
+- At timestamp t=100, look at next 5 points: [t100, t101, t102, t103, t104]
+- If at least 3 of these 5 have anomaly score ≥ 2.0, mark t100 as part of a period
+- Move to t=101 and repeat
+- All consecutive marked timestamps form a period with timestamp_start to timestamp_end
+- Each period shows: start time, end time, number of points, mean score, max score
+
+**Typical Use Case:**
+```
+Point detection: Identifies 47 individual anomalous timestamps with high scores
+Period detection (K=3, N=5, threshold=2.0): Consolidates these into 3 meaningful periods:
+  - Period 1: 2024-01-01 10:00 to 2024-01-01 13:00 (15 points, mean score: 3.2)
+  - Period 2: 2024-01-01 18:00 to 2024-01-01 19:00 (8 points, mean score: 2.8)
+  - Period 3: 2024-01-02 09:00 to 2024-01-02 11:00 (24 points, mean score: 4.1)
+```
+
+**Why Use Period Detection:**
+
+Period detection is useful for identifying sustained anomalies rather than isolated spikes, which is important for many sensor monitoring applications:
+- **Equipment degradation** - Detect when sensors show prolonged abnormal behavior
+- **Process drift** - Identify when industrial processes deviate from normal operation
+- **Fault diagnosis** - Distinguish between transient noise and persistent faults
+- **Maintenance scheduling** - Prioritize interventions based on sustained anomalies
+
+**Parameter Selection Tips:**
+
+Use the point-by-point detection visualization to explore score distributions before setting period parameters:
+- High threshold + low K = Only detect very strong, concentrated anomalies
+- Low threshold + high K = Detect weaker but more sustained anomalies
+- Adjust N based on your temporal resolution (larger N for high-frequency data)
 
 **Acceptable Column Names:**
 - **Timestamp:** `timestamp`, `Timestamp`, `time`, `Time`, `datetime`, `Datetime`, `date`, `Date`, `Horodatage`, `capture_date`, `measurement_date`

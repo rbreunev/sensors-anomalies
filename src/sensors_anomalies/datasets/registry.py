@@ -8,6 +8,7 @@ These transformers serve as reference implementations showing how to normalize
 different Kaggle dataset structures. Users upload CSVs at runtime rather than
 including data in the repository.
 """
+# pylint: disable=duplicate-code
 
 from __future__ import annotations
 
@@ -76,10 +77,16 @@ def transform_sensor_fault(df_wide: pd.DataFrame) -> pd.DataFrame:
     if label_col:
         exclude_cols.add(label_col)
 
-    sensor_cols = [col for col in df.columns if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])]
+    sensor_cols = [
+        col for col in df.columns
+        if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])
+    ]
 
     if not sensor_cols:
-        raise ValueError(f"No numeric sensor columns found. Excluded: {exclude_cols}, Available: {df.columns.tolist()}")
+        raise ValueError(
+            f"No numeric sensor columns found. Excluded: {exclude_cols}, "
+            f"Available: {df.columns.tolist()}"
+        )
 
     # Melt to long format
     id_vars = [timestamp_col]

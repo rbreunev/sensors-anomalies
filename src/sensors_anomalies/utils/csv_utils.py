@@ -115,8 +115,8 @@ def infer_timestamp_column(df: pd.DataFrame) -> str:
 
     raise ValueError(
         f"Could not find timestamp column. Available columns: {df.columns.tolist()}\n"
-        "Acceptable timestamp column names: timestamp, Timestamp, time, Time, datetime, Datetime, date, Date, "
-        "Horodatage, capture_date, measurement_date"
+        "Acceptable timestamp column names: timestamp, Timestamp, time, Time, datetime, "
+        "Datetime, date, Date, Horodatage, capture_date, measurement_date"
     )
 
 
@@ -414,10 +414,16 @@ def transform_wide_to_long(
     if label_col:
         exclude_cols.add(label_col)
 
-    sensor_cols = [col for col in df.columns if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])]
+    sensor_cols = [
+        col for col in df.columns
+        if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])
+    ]
 
     if not sensor_cols:
-        raise ValueError(f"No numeric sensor columns found. Excluded: {exclude_cols}, Available: {df.columns.tolist()}")
+        raise ValueError(
+            f"No numeric sensor columns found. Excluded: {exclude_cols}, "
+            f"Available: {df.columns.tolist()}"
+        )
 
     # Melt to long format
     id_vars = [timestamp_col]
