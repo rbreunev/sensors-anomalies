@@ -4,7 +4,7 @@ emoji: 🧪
 colorFrom: blue
 colorTo: green
 sdk: gradio
-sdk_version: "4.44.1"
+sdk_version: "6.2.0"
 python_version: "3.11"
 app_file: app.py
 pinned: false
@@ -39,13 +39,8 @@ uv run python app.py
 
 ### Deployment (Hugging Face Spaces)
 
-For deploying to Hugging Face Spaces, a `requirements.txt` file is included. To regenerate it from the project dependencies:
-
-```bash
-uv pip compile pyproject.toml -o requirements.txt
-```
-
-This command creates a pinned requirements file with all transitive dependencies resolved, ensuring reproducible deployments.
+For deploying to Hugging Face Spaces, a `requirements.txt` file is included.
+Keep it minimal (only dependencies used per the app, no dependencies related to HF spaces).
 
 ### Using the App
 
