@@ -38,7 +38,7 @@ fsspec==2025.12.0
     # via
     #   gradio-client
     #   huggingface-hub
-gradio==6.2.0
+gradio>=5.0.0
     # via sensors-anomalies (pyproject.toml)
 gradio-client==2.0.2
     # via gradio
@@ -58,7 +58,7 @@ httpx==0.28.1
     #   gradio-client
     #   huggingface-hub
     #   safehttpx
-huggingface-hub==1.2.3
+huggingface_hub>=1.0.0
     # via
     #   gradio
     #   gradio-client
