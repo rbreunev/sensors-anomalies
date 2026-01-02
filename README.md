@@ -25,6 +25,16 @@ uv run tox -e lint,type,pylint,tests
 uv run python app.py
 ```
 
+### Deployment (Hugging Face Spaces)
+
+For deploying to Hugging Face Spaces, a `requirements.txt` file is included. To regenerate it from the project dependencies:
+
+```bash
+uv pip compile pyproject.toml -o requirements.txt
+```
+
+This command creates a pinned requirements file with all transitive dependencies resolved, ensuring reproducible deployments.
+
 ### Using the App
 
 **Main Workflow:**
