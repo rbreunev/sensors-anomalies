@@ -4,5 +4,3 @@ scikit-learn>=1.5
 joblib>=1.4
 matplotlib>=3.8
 plotly>=5.18
-
--e . # To install sensors-anomalies package in editable mode
