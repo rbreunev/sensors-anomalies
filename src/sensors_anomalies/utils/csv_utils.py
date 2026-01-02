@@ -7,8 +7,7 @@ and ensuring they conform to the canonical long format schema.
 
 from __future__ import annotations
 
-from io import BytesIO, StringIO
-from typing import Any
+from io import BytesIO
 
 import pandas as pd
 
@@ -18,6 +17,9 @@ from sensors_anomalies.types import validate_long_df
 def read_uploaded_csv(file_bytes: bytes) -> pd.DataFrame:
     """
     Read a CSV file from uploaded bytes.
+
+    Automatically detects CSV separator (comma ',' or semicolon ';').
+    Decimal separator must be a period '.'.
 
     Parameters
     ----------
@@ -37,10 +39,28 @@ def read_uploaded_csv(file_bytes: bytes) -> pd.DataFrame:
     if not file_bytes:
         raise ValueError("File bytes are empty or null")
 
+    # Try to detect separator by reading first line
     try:
-        df = pd.read_csv(BytesIO(file_bytes))
+        first_line = file_bytes.split(b"\n")[0].decode("utf-8")
+        comma_count = first_line.count(",")
+        semicolon_count = first_line.count(";")
+
+        # Choose separator with more occurrences
+        separator = ";" if semicolon_count > comma_count else ","
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Default to comma if detection fails
+        separator = ","
+
+    # Try to parse CSV with detected separator
+    try:
+        df = pd.read_csv(BytesIO(file_bytes), sep=separator, decimal=".")
     except Exception as e:
-        raise ValueError(f"Failed to parse CSV: {e}") from e
+        raise ValueError(
+            f"Failed to parse CSV: {e}\n"
+            "Supported formats:\n"
+            "  • Separator: comma ',' or semicolon ';' (auto-detected)\n"
+            "  • Decimal separator: period '.' only"
+        ) from e
 
     if df is None:
         raise ValueError("CSV parsing returned null DataFrame")
@@ -70,7 +90,19 @@ def infer_timestamp_column(df: pd.DataFrame) -> str:
     ValueError
         If no timestamp column can be identified.
     """
-    candidates = ["timestamp", "Timestamp", "time", "Time", "datetime", "Datetime", "date", "Date"]
+    candidates = [
+        "timestamp",
+        "Timestamp",
+        "time",
+        "Time",
+        "datetime",
+        "Datetime",
+        "date",
+        "Date",
+        "Horodatage",
+        "capture_date",
+        "measurement_date",
+    ]
 
     for col in candidates:
         if col in df.columns:
@@ -83,7 +115,8 @@ def infer_timestamp_column(df: pd.DataFrame) -> str:
 
     raise ValueError(
         f"Could not find timestamp column. Available columns: {df.columns.tolist()}\n"
-        "Expected one of: timestamp, Timestamp, time, datetime, date, or a datetime-typed column"
+        "Acceptable timestamp column names: timestamp, Timestamp, time, Time, datetime, Datetime, date, Date, "
+        "Horodatage, capture_date, measurement_date"
     )
 
 
@@ -98,7 +131,7 @@ def infer_label_column(df: pd.DataFrame) -> str | None:
 
     Returns
     -------
-    str or None
+    str | None
         Name of the likely label column, or None if not found.
     """
     candidates = ["label", "Label", "target", "Target", "fault", "Fault", "anomaly", "Anomaly"]
@@ -108,6 +141,166 @@ def infer_label_column(df: pd.DataFrame) -> str | None:
             return col
 
     return None
+
+
+def infer_signal_column(df: pd.DataFrame) -> str | None:
+    """
+    Infer the signal/sensor ID column name from a dataframe.
+
+    This is used to detect semi-long format CSVs.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+
+    Returns
+    -------
+    str | None
+        Name of the likely signal column, or None if not found.
+    """
+    candidates = [
+        "signal",
+        "Signal",
+        "sensor",
+        "Sensor",
+        "sensor_id",
+        "SensorId",
+        "SensorID",
+        "sensor_name",
+        "SensorName",
+    ]
+
+    for col in candidates:
+        if col in df.columns:
+            return col
+
+    return None
+
+
+def infer_value_column(df: pd.DataFrame) -> str | None:
+    """
+    Infer the value/measurement column name from a dataframe.
+
+    This is used to detect semi-long format CSVs.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+
+    Returns
+    -------
+    str | None
+        Name of the likely value column, or None if not found.
+    """
+    candidates = ["value", "Value", "measurement", "Measurement", "reading", "Reading"]
+
+    for col in candidates:
+        if col in df.columns:
+            return col
+
+    return None
+
+
+def is_semi_long_format(df: pd.DataFrame) -> bool:
+    """
+    Check if a dataframe is in semi-long format.
+
+    Semi-long format has timestamp, signal/sensor ID, and value columns
+    but is missing the series_id column.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+
+    Returns
+    -------
+    bool
+        True if the dataframe appears to be in semi-long format.
+    """
+    try:
+        infer_timestamp_column(df)  # Check if timestamp column exists
+    except ValueError:
+        return False
+
+    signal_col = infer_signal_column(df)
+    value_col = infer_value_column(df)
+
+    return signal_col is not None and value_col is not None
+
+
+def normalize_semi_long_format(df: pd.DataFrame, series_id: str = "default_series") -> pd.DataFrame:
+    """
+    Normalize a semi-long format dataframe to full long format.
+
+    Semi-long format has timestamp, signal, and value columns but no series_id.
+    This function adds the series_id column and renames columns to match schema.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Semi-long format dataframe.
+    series_id : str, optional
+        Series identifier to assign to all rows, by default "default_series".
+
+    Returns
+    -------
+    pd.DataFrame
+        Full long-format dataframe with series_id added.
+
+    Raises
+    ------
+    ValueError
+        If required columns cannot be found.
+    """
+    df_out = df.copy()
+
+    # Infer column names
+    timestamp_col = infer_timestamp_column(df_out)
+    signal_col = infer_signal_column(df_out)
+    value_col = infer_value_column(df_out)
+    label_col = infer_label_column(df_out)
+
+    if signal_col is None or value_col is None:
+        raise ValueError(
+            f"Cannot normalize semi-long format. Found columns: {df_out.columns.tolist()}\n"
+            "Expected signal column (sensor, SensorId, etc.) and value column (value, Value, etc.)"
+        )
+
+    # Parse timestamp
+    df_out[timestamp_col] = pd.to_datetime(df_out[timestamp_col])
+
+    # Rename columns to standard names
+    rename_map = {
+        timestamp_col: "timestamp",
+        signal_col: "signal",
+        value_col: "value",
+    }
+    if label_col:
+        rename_map[label_col] = "label"
+
+    df_out = df_out.rename(columns=rename_map)
+
+    # Add series_id
+    df_out["series_id"] = series_id
+
+    # Reorder columns
+    cols = ["series_id", "timestamp", "signal", "value"]
+    if label_col:
+        cols.append("label")
+
+    # Keep only relevant columns
+    df_out = df_out[[col for col in cols if col in df_out.columns]]
+
+    # Sort by timestamp and signal
+    df_out = df_out.sort_values(["timestamp", "signal"]).reset_index(drop=True)
+
+    # Validate
+    validate_long_df(df_out)
+
+    return df_out
 
 
 def is_long_format(df: pd.DataFrame) -> bool:
@@ -175,16 +368,19 @@ def transform_wide_to_long(
     """
     Transform a wide-format dataframe to long format.
 
+    Automatically detects if the data is in semi-long format (has signal and value columns)
+    or true wide format (has multiple sensor columns).
+
     Parameters
     ----------
     df_wide : pd.DataFrame
-        Wide-format dataframe with timestamp and multiple sensor columns.
-    timestamp_col : str, optional
-        Name of the timestamp column. If None, will be inferred.
-    label_col : str, optional
-        Name of the label column. If None, will be inferred.
-    series_id : str, default="default_series"
-        Series identifier to assign to all rows.
+        Wide-format or semi-long format dataframe.
+    timestamp_col : str | None, optional
+        Name of the timestamp column. If None, will be inferred, by default None.
+    label_col : str | None, optional
+        Name of the label column. If None, will be inferred, by default None.
+    series_id : str, optional
+        Series identifier to assign to all rows, by default "default_series".
 
     Returns
     -------
@@ -196,6 +392,11 @@ def transform_wide_to_long(
     ValueError
         If timestamp column cannot be found or dataframe is invalid.
     """
+    # Check if already in semi-long format
+    if is_semi_long_format(df_wide):
+        return normalize_semi_long_format(df_wide, series_id=series_id)
+
+    # Otherwise, proceed with wide-to-long transformation
     df = df_wide.copy()
 
     # Infer columns if not provided
@@ -213,16 +414,10 @@ def transform_wide_to_long(
     if label_col:
         exclude_cols.add(label_col)
 
-    sensor_cols = [
-        col for col in df.columns
-        if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])
-    ]
+    sensor_cols = [col for col in df.columns if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])]
 
     if not sensor_cols:
-        raise ValueError(
-            f"No numeric sensor columns found. Excluded: {exclude_cols}, "
-            f"Available: {df.columns.tolist()}"
-        )
+        raise ValueError(f"No numeric sensor columns found. Excluded: {exclude_cols}, Available: {df.columns.tolist()}")
 
     # Melt to long format
     id_vars = [timestamp_col]

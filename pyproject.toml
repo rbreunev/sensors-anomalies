@@ -15,6 +15,7 @@ dependencies = [
   "joblib>=1.4",
   "matplotlib>=3.8",
   "gradio>=4.44",
+  "plotly>=5.18",
 ]
 
 [project.optional-dependencies]

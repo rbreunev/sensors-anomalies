@@ -4,6 +4,8 @@ Tests for dataset transformers.
 Validates that registered transformers correctly convert wide-format data
 to the canonical long format.
 """
+# ruff: noqa: S101
+# pylint: disable=import-error
 
 from __future__ import annotations
 
@@ -14,8 +16,8 @@ from sensors_anomalies.datasets.registry import (
     apply_transformer,
     get_transformer,
     list_transformers,
+    transform_sensor_fault,
 )
-from sensors_anomalies.datasets.sensor_fault import transform_sensor_fault
 from sensors_anomalies.types import validate_long_df
 
 
@@ -44,13 +46,15 @@ def test_get_transformer_invalid() -> None:
 def test_sensor_fault_transformer() -> None:
     """Test sensor fault transformer with mock data."""
     # Create mock wide-format data similar to Kaggle dataset
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=5, freq="h"),
-        "sensor_00": [1.0, 2.0, 3.0, 4.0, 5.0],
-        "sensor_01": [1.1, 2.1, 3.1, 4.1, 5.1],
-        "sensor_02": [1.2, 2.2, 3.2, 4.2, 5.2],
-        "target": [0, 0, 0, 1, 0],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=5, freq="h"),
+            "sensor_00": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "sensor_01": [1.1, 2.1, 3.1, 4.1, 5.1],
+            "sensor_02": [1.2, 2.2, 3.2, 4.2, 5.2],
+            "target": [0, 0, 0, 1, 0],
+        }
+    )
 
     df_long = transform_sensor_fault(df_wide)
 
@@ -78,11 +82,13 @@ def test_sensor_fault_transformer() -> None:
 
 def test_sensor_fault_transformer_no_labels() -> None:
     """Test sensor fault transformer without label column."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=3, freq="h"),
-        "sensor_00": [1.0, 2.0, 3.0],
-        "sensor_01": [1.1, 2.1, 3.1],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=3, freq="h"),
+            "sensor_00": [1.0, 2.0, 3.0],
+            "sensor_01": [1.1, 2.1, 3.1],
+        }
+    )
 
     df_long = transform_sensor_fault(df_wide)
 
@@ -94,10 +100,12 @@ def test_sensor_fault_transformer_no_labels() -> None:
 def test_sensor_fault_transformer_various_timestamp_names() -> None:
     """Test that transformer handles various timestamp column names."""
     for timestamp_col in ["timestamp", "Timestamp", "time", "datetime"]:
-        df_wide = pd.DataFrame({
-            timestamp_col: pd.date_range("2024-01-01", periods=2),
-            "sensor_00": [1.0, 2.0],
-        })
+        df_wide = pd.DataFrame(
+            {
+                timestamp_col: pd.date_range("2024-01-01", periods=2),
+                "sensor_00": [1.0, 2.0],
+            }
+        )
 
         df_long = transform_sensor_fault(df_wide)
         validate_long_df(df_long)
@@ -106,11 +114,13 @@ def test_sensor_fault_transformer_various_timestamp_names() -> None:
 
 def test_apply_transformer() -> None:
     """Test applying a transformer through the registry."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=3),
-        "sensor_00": [1.0, 2.0, 3.0],
-        "sensor_01": [1.1, 2.1, 3.1],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=3),
+            "sensor_00": [1.0, 2.0, 3.0],
+            "sensor_01": [1.1, 2.1, 3.1],
+        }
+    )
 
     df_long = apply_transformer("sensor_fault", df_wide)
 
@@ -120,10 +130,12 @@ def test_apply_transformer() -> None:
 
 def test_apply_transformer_invalid() -> None:
     """Test that applying invalid transformer raises KeyError."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=2),
-        "sensor_00": [1.0, 2.0],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=2),
+            "sensor_00": [1.0, 2.0],
+        }
+    )
 
     with pytest.raises(KeyError):
         apply_transformer("nonexistent", df_wide)
@@ -131,10 +143,12 @@ def test_apply_transformer_invalid() -> None:
 
 def test_sensor_fault_transformer_no_sensors() -> None:
     """Test that transformer fails gracefully with no sensor columns."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=2),
-        "text_column": ["a", "b"],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=2),
+            "text_column": ["a", "b"],
+        }
+    )
 
     with pytest.raises(ValueError, match="No numeric sensor columns found"):
         transform_sensor_fault(df_wide)
@@ -142,10 +156,12 @@ def test_sensor_fault_transformer_no_sensors() -> None:
 
 def test_sensor_fault_transformer_no_timestamp() -> None:
     """Test that transformer fails when timestamp column is missing."""
-    df_wide = pd.DataFrame({
-        "sensor_00": [1.0, 2.0, 3.0],
-        "sensor_01": [1.1, 2.1, 3.1],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "sensor_00": [1.0, 2.0, 3.0],
+            "sensor_01": [1.1, 2.1, 3.1],
+        }
+    )
 
     with pytest.raises(ValueError, match="Could not find timestamp column"):
         transform_sensor_fault(df_wide)

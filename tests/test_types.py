@@ -1,4 +1,5 @@
 """Unit tests for shared types and validation."""
+# pylint: disable=import-error
 
 from __future__ import annotations
 

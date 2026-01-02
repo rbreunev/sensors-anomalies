@@ -31,18 +31,21 @@ uv run python app.py
 
 ### Using the App
 
-1. **Upload a CSV** - Either:
-   - Long format: Already has `series_id`, `timestamp`, `signal`, `value` columns
-   - Wide format: Has `timestamp` and multiple sensor columns (e.g., `sensor_00`, `sensor_01`, ...)
+1. **Upload a CSV** - The app supports three formats:
+   - **Long format:** Already has `series_id`, `timestamp`, `signal`, `value` columns
+   - **Semi-long format:** Has `timestamp`, signal/sensor identifier, `value` columns (but no `series_id`)
+   - **Wide format:** Has `timestamp` and multiple sensor columns (e.g., `sensor_00`, `sensor_01`, ...)
 
-2. **Select Dataset Type**:
-   - `auto` - Automatically detect format and transform if needed
-   - `sensor_fault` - Use Kaggle Sensor Fault Detection transformer
-   - Future transformers will be added here
+2. **Process CSV** - Automatically detects format and validates/transforms to long format
 
-3. **Process CSV** - Validates and normalizes to long format
+3. **Run Detection** - Select algorithms and detect anomalies (coming in Step 3)
 
-4. **Run Detection** - Select algorithms and detect anomalies (coming in Step 3)
+**Acceptable Column Names:**
+- **Timestamp:** `timestamp`, `Timestamp`, `time`, `Time`, `datetime`, `Datetime`, `date`, `Date`, `Horodatage`, `capture_date`, `measurement_date`
+- **Signal/Sensor (semi-long):** `signal`, `Signal`, `sensor`, `Sensor`, `SensorId`, `sensor_id`, `SensorID`, `sensor_name`, `SensorName`
+- **Value (semi-long):** `value`, `Value`, `measurement`, `Measurement`, `reading`, `Reading`
+- **Label (optional):** `label`, `Label`, `target`, `Target`, `fault`, `Fault`, `anomaly`, `Anomaly`
+- **Sensors (wide):** Any numeric columns not matching the above
 
 ## 📊 Data Format
 
@@ -67,9 +70,31 @@ s1,2024-01-01 00:01:00,sensor_00,1.25,0
 s1,2024-01-01 00:01:00,sensor_01,2.50,1
 ```
 
+### Semi-Long Format (Auto-Normalized)
+
+If you upload a semi-long format CSV (has timestamp, signal, and value columns but no series_id), it will be normalized:
+
+**Input (Semi-Long):**
+```csv
+timestamp,SensorId,Value,target
+2024-01-01 00:00:00,sensor_00,1.23,0
+2024-01-01 00:00:00,sensor_01,2.45,0
+2024-01-01 00:01:00,sensor_00,1.25,1
+2024-01-01 00:01:00,sensor_01,2.50,1
+```
+
+**Output (Long):**
+```csv
+series_id,timestamp,signal,value,label
+default_series,2024-01-01 00:00:00,sensor_00,1.23,0
+default_series,2024-01-01 00:00:00,sensor_01,2.45,0
+default_series,2024-01-01 00:01:00,sensor_00,1.25,1
+default_series,2024-01-01 00:01:00,sensor_01,2.50,1
+```
+
 ### Wide Format (Auto-Transformed)
 
-If you upload a wide-format CSV, it will be automatically transformed:
+If you upload a wide-format CSV (has timestamp and multiple sensor columns), it will be melted to long format:
 
 **Input (Wide):**
 ```csv
@@ -116,8 +141,7 @@ sensors-anomalies/
 │   ├── types.py                    # Core data types and validation
 │   ├── constants.py                # Project constants
 │   ├── datasets/
-│   │   ├── registry.py             # Transformer registry
-│   │   └── sensor_fault.py         # Kaggle sensor fault transformer
+│   │   └── registry.py             # Transformer registry + transformers
 │   ├── algorithms/
 │   │   └── registry.py             # Algorithm registry (Step 3)
 │   └── utils/
@@ -146,33 +170,30 @@ All code follows strict standards:
 
 ### Adding a New Transformer
 
-1. Create `src/sensors_anomalies/datasets/your_dataset.py`:
+Add the transformer function directly to `src/sensors_anomalies/datasets/registry.py`:
 
 ```python
-from sensors_anomalies.datasets.registry import register_transformer
-from sensors_anomalies.types import DatasetSpec
-
 def transform_your_dataset(df_wide: pd.DataFrame) -> pd.DataFrame:
     """Transform your dataset to long format."""
     # Implementation here
     return df_long
+```
 
-def register_your_dataset_transformer() -> None:
+Then register it in `_register_defaults()`:
+
+```python
+def _register_defaults() -> None:
+    """Register default transformers."""
+    # Existing transformers...
+
+    # Add your new transformer
     register_transformer(
         spec=DatasetSpec("your_id", "Your Name", "https://source.url"),
         transformer=transform_your_dataset,
     )
 ```
 
-2. Register in `datasets/registry.py`:
-
-```python
-def _register_defaults() -> None:
-    from sensors_anomalies.datasets.your_dataset import register_your_dataset_transformer
-    register_your_dataset_transformer()
-```
-
-3. Add tests in `tests/test_transformers.py`
+Add tests in `tests/test_transformers.py` to validate the transformation.
 
 ## 📝 Citations
 

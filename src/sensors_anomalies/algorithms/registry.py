@@ -93,22 +93,25 @@ def run_algorithm(algo_id: str, df_long: pd.DataFrame) -> pd.DataFrame:
 
 
 def _register_defaults() -> None:
-    """Register placeholder algorithms so the app runs before real algorithms are added."""
+    """Register default anomaly detection algorithms."""
+    # pylint: disable=import-outside-toplevel
+    from sensors_anomalies.algorithms.unsupervised import (
+        detect_iqr,
+        detect_isolation_forest,
+        detect_zscore,
+    )
 
-    def _noop(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        No-op algorithm.
+    register_algorithm(
+        AlgoSpec("zscore", "Z-Score", "unsupervised"),
+        detect_zscore,
+    )
 
-        Parameters
-        ----------
-        df : pd.DataFrame
-            Input dataframe (unused).
+    register_algorithm(
+        AlgoSpec("iqr", "IQR (Interquartile Range)", "unsupervised"),
+        detect_iqr,
+    )
 
-        Returns
-        -------
-        pd.DataFrame
-            Empty result frame with expected columns.
-        """
-        return pd.DataFrame(columns=["series_id", "timestamp_start", "timestamp_end", "score"])
-
-    register_algorithm(AlgoSpec("noop", "No-op (placeholder)", "rules"), _noop)
+    register_algorithm(
+        AlgoSpec("isolation_forest", "Isolation Forest", "unsupervised"),
+        detect_isolation_forest,
+    )

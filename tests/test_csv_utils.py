@@ -3,10 +3,10 @@ Tests for CSV utilities.
 
 Validates CSV reading, column inference, format detection, and transformations.
 """
+# ruff: noqa: S101
+# pylint: disable=import-error
 
 from __future__ import annotations
-
-from io import BytesIO
 
 import pandas as pd
 import pytest
@@ -30,9 +30,28 @@ def test_read_uploaded_csv() -> None:
     assert list(df.columns) == ["timestamp", "value"]
 
 
+def test_read_uploaded_csv_semicolon() -> None:
+    """Test reading semicolon-separated CSV."""
+    csv_data = b"timestamp;value\n2024-01-01;1.0\n2024-01-02;2.0"
+    df = read_uploaded_csv(csv_data)
+
+    assert len(df) == 2
+    assert list(df.columns) == ["timestamp", "value"]
+    assert df["value"].iloc[0] == 1.0
+
+
+def test_read_uploaded_csv_auto_detect_comma() -> None:
+    """Test auto-detection prefers comma when both present."""
+    csv_data = b"timestamp,value,sensor\n2024-01-01,1.0,sensor_a\n2024-01-02,2.0,sensor_b"
+    df = read_uploaded_csv(csv_data)
+
+    assert len(df) == 2
+    assert len(df.columns) == 3
+
+
 def test_read_uploaded_csv_invalid() -> None:
     """Test that invalid CSV raises ValueError."""
-    invalid_data = 'a,b\n"1,2\n3,4'
+    invalid_data = b'a,b\n"1,2\n3,4'
     # Should still parse, but let's test truly invalid data
     with pytest.raises(ValueError, match="Failed to parse CSV"):
         read_uploaded_csv(file_bytes=invalid_data)
@@ -91,30 +110,36 @@ def test_infer_label_column_missing() -> None:
 
 def test_is_long_format() -> None:
     """Test long format detection."""
-    df_long = pd.DataFrame({
-        "series_id": ["s1"] * 3,
-        "timestamp": pd.date_range("2024-01-01", periods=3),
-        "signal": ["sensor_a"] * 3,
-        "value": [1.0, 2.0, 3.0],
-    })
+    df_long = pd.DataFrame(
+        {
+            "series_id": ["s1"] * 3,
+            "timestamp": pd.date_range("2024-01-01", periods=3),
+            "signal": ["sensor_a"] * 3,
+            "value": [1.0, 2.0, 3.0],
+        }
+    )
     assert is_long_format(df_long) is True
 
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=3),
-        "sensor_a": [1.0, 2.0, 3.0],
-        "sensor_b": [4.0, 5.0, 6.0],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=3),
+            "sensor_a": [1.0, 2.0, 3.0],
+            "sensor_b": [4.0, 5.0, 6.0],
+        }
+    )
     assert is_long_format(df_wide) is False
 
 
 def test_validate_and_normalize_long_format() -> None:
     """Test validation and normalization of long format data."""
-    df = pd.DataFrame({
-        "series_id": ["s1"] * 3,
-        "timestamp": ["2024-01-01", "2024-01-02", "2024-01-03"],
-        "signal": ["sensor_a"] * 3,
-        "value": [1.0, 2.0, 3.0],
-    })
+    df = pd.DataFrame(
+        {
+            "series_id": ["s1"] * 3,
+            "timestamp": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "signal": ["sensor_a"] * 3,
+            "value": [1.0, 2.0, 3.0],
+        }
+    )
 
     df_normalized = validate_and_normalize_long_format(df)
 
@@ -124,10 +149,12 @@ def test_validate_and_normalize_long_format() -> None:
 
 def test_validate_and_normalize_long_format_invalid() -> None:
     """Test that invalid long format raises ValueError."""
-    df = pd.DataFrame({
-        "timestamp": ["2024-01-01", "2024-01-02"],
-        "sensor_a": [1.0, 2.0],
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp": ["2024-01-01", "2024-01-02"],
+            "sensor_a": [1.0, 2.0],
+        }
+    )
 
     with pytest.raises(ValueError, match="not in long format"):
         validate_and_normalize_long_format(df)
@@ -135,11 +162,13 @@ def test_validate_and_normalize_long_format_invalid() -> None:
 
 def test_transform_wide_to_long() -> None:
     """Test transformation from wide to long format."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=3),
-        "sensor_a": [1.0, 2.0, 3.0],
-        "sensor_b": [4.0, 5.0, 6.0],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=3),
+            "sensor_a": [1.0, 2.0, 3.0],
+            "sensor_b": [4.0, 5.0, 6.0],
+        }
+    )
 
     df_long = transform_wide_to_long(df_wide, series_id="test_series")
 
@@ -151,12 +180,14 @@ def test_transform_wide_to_long() -> None:
 
 def test_transform_wide_to_long_with_labels() -> None:
     """Test transformation with label column."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=3),
-        "sensor_a": [1.0, 2.0, 3.0],
-        "sensor_b": [4.0, 5.0, 6.0],
-        "label": [0, 0, 1],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=3),
+            "sensor_a": [1.0, 2.0, 3.0],
+            "sensor_b": [4.0, 5.0, 6.0],
+            "label": [0, 0, 1],
+        }
+    )
 
     df_long = transform_wide_to_long(df_wide)
 
@@ -168,12 +199,14 @@ def test_transform_wide_to_long_with_labels() -> None:
 
 def test_transform_wide_to_long_auto_infer() -> None:
     """Test auto-inference of timestamp and label columns."""
-    df_wide = pd.DataFrame({
-        "Timestamp": pd.date_range("2024-01-01", periods=2),
-        "sensor_01": [1.0, 2.0],
-        "sensor_02": [3.0, 4.0],
-        "target": [0, 1],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "Timestamp": pd.date_range("2024-01-01", periods=2),
+            "sensor_01": [1.0, 2.0],
+            "sensor_02": [3.0, 4.0],
+            "target": [0, 1],
+        }
+    )
 
     df_long = transform_wide_to_long(df_wide)
 
@@ -184,10 +217,12 @@ def test_transform_wide_to_long_auto_infer() -> None:
 
 def test_transform_wide_to_long_no_sensors() -> None:
     """Test that wide format with no numeric columns raises ValueError."""
-    df_wide = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=2),
-        "text_col": ["a", "b"],
-    })
+    df_wide = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=2),
+            "text_col": ["a", "b"],
+        }
+    )
 
     with pytest.raises(ValueError, match="No numeric sensor columns found"):
         transform_wide_to_long(df_wide)
