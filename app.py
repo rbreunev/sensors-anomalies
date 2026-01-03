@@ -44,7 +44,8 @@ def build_app() -> gr.Blocks:
             "Many scientific or industrial applications rely on sensor data. "
             "Hence, the importance to detect sensor anomalies before to build datasets for further use cases.\n\n"
             "This application allows to test several approaches for such detections. "
-            "Upload a CSV file with sensor time-series data and start testing !."
+            "Upload a CSV file with sensor time-series data and start testing !\n\n"
+            "An example dataset that can be used : https://www.kaggle.com/datasets/arashnic/sensor-fault-detection-data"
         )
         gr.Markdown("""
 **📝 CSV Format Requirements:**
